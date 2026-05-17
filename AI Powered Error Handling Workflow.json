@@ -1,0 +1,349 @@
+{
+  "name": "AI Powered Error Handling Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a4017718-6194-446c-9f39-deb36af376a7",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        384,
+        2336
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://invalid-api-demo.com/data",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "6c598aac-be0c-4d78-8926-0a39aa8b5853",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        624,
+        2336
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4.1",
+        "prompt": {
+          "messages": [
+            {
+              "content": "=write a message that will be send to slack according      to error that happen in workow, also tell him with error message  {{ $json.workflowName }} with id {{ $json.workflowId }} at .{{ $json.timestamp }} with error {{ $json.errorMessage }}"
+            }
+          ]
+        },
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "c151c08f-98c9-44f0-b149-6e5f63e2f820",
+      "name": "AI Error Analysis",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        2480
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "311e8eff-5ee9-4979-8968-2dc044cc6e60",
+              "leftValue": "={{ $json.error.errno }}",
+              "rightValue": 400,
+              "operator": {
+                "type": "number",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "653f77b4-29c7-42a4-a2bd-b79069b6be4c",
+      "name": "IF Success?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2336
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    workflowId: $workflow.id,\n    workflowName: $workflow.name,\n    executionId: $execution.id,\n    timestamp: new Date().toISOString(),\n    errorMessage: $json.error?.message || 'Unknown error',\n    statusCode: $json.statusCode || 500,\n    retryCount: $json.retryCount || 0,\n    originalError: $json\n  }\n}];"
+      },
+      "id": "048ad14b-804b-479f-b2be-8c0bc34637fe",
+      "name": "Format Error1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        2480
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "user",
+        "user": {
+          "__rl": true,
+          "value": "U0AKKHUQSQY",
+          "mode": "list",
+          "cachedResultName": "xnomi05"
+        },
+        "text": "🚨 AI Workflow Failure Alert\n\nWorkflow: {{$node[\"Format Error\"].json[\"workflowName\"]}}\nExecution ID: {{$node[\"Format Error\"].json[\"executionId\"]}}\nStatus Code: {{$node[\"Format Error\"].json[\"statusCode\"]}}\nRetry Count: {{$node[\"Format Error\"].json[\"retryCount\"]}}\nTimestamp: {{$node[\"Format Error\"].json[\"timestamp\"]}}\n\nRaw Error:\n{{$node[\"Format Error\"].json[\"errorMessage\"]}}\n\n🤖 AI Incident Analysis:\n{{$json[\"message\"] || $json[\"choices\"][0][\"message\"][\"content\"]}}",
+        "otherOptions": {}
+      },
+      "id": "e337285a-896a-4a11-9a3f-8d1536bb2ee1",
+      "name": "Slack Alert1",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        2480
+      ],
+      "webhookId": "774a328b-6135-4172-b782-6e32c99b9a4a",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "0XK2cSm6tSKRn3lF",
+          "name": "Slack OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "unit": "minutes"
+      },
+      "id": "d3723a72-1f15-4b78-8fb7-fc3c85bfb911",
+      "name": "Wait Before Retry1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1872,
+        2480
+      ],
+      "webhookId": "c9e7e90b-20f2-42a1-a651-91daf45cfd19"
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    ...$json,\n    retryCount: ($json.retryCount || 0) + 1\n  }\n}];"
+      },
+      "id": "e1093f80-8238-4516-9350-339e05529c35",
+      "name": "Increment Retry Count1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2128,
+        2480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.retryCount}}",
+              "operation": "smaller",
+              "value2": 3
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "21de44e8-be42-4c4a-ac5c-eaccc375676d",
+      "name": "Retry < 3?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2384,
+        2480
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    success: false,\n    finalFailure: true,\n    message: 'Workflow permanently failed after max retries',\n    workflowId: $workflow.id,\n    executionId: $execution.id,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "1701b61b-732a-458b-a1e7-e5d5c7166c06",
+      "name": "Final Failure Handler1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2624,
+        2688
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { success: true, data: $json } }];"
+      },
+      "id": "14e69f6d-9e51-4115-bd34-090f7664d7fe",
+      "name": "Success Handler1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        2176
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "IF Success?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Error Analysis": {
+      "main": [
+        [
+          {
+            "node": "Slack Alert1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Success?1": {
+      "main": [
+        [
+          {
+            "node": "Success Handler1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Error1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error1": {
+      "main": [
+        [
+          {
+            "node": "AI Error Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Alert1": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Retry1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Retry1": {
+      "main": [
+        [
+          {
+            "node": "Increment Retry Count1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Retry Count1": {
+      "main": [
+        [
+          {
+            "node": "Retry < 3?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry < 3?1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Failure Handler1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2ba92726-3d19-4e0d-8390-d09b18821421",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5e7a8ca6c91c5e3424513d22fad671cffb250642967db7c68bf4a47c0a1f9ccd"
+  },
+  "id": "wRigrBk51vNvX7lI",
+  "tags": []
+}
